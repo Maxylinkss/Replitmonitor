@@ -1,19 +1,22 @@
-FROM selenium/standalone-chrome:latest
 
-USER root
+FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
+    wget \
+    gnupg \
+    unzip \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable --no-install-recommends \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 
-ENV DISPLAY=:99
-
-CMD ["python3", "-u", "main.py"]
+CMD ["python", "-u", "main.py"]
