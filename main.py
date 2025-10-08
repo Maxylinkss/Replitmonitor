@@ -4,6 +4,8 @@ import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -14,13 +16,26 @@ CHECK_INTERVAL = int(os.environ.get('CHECK_INTERVAL', '30'))
 
 def setup_driver():
     chrome_options = Options()
-    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--headless=new')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--window-size=1920,1080')
-    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-    driver = webdriver.Chrome(options=chrome_options)
+    chrome_options.add_argument('--disable-software-rasterizer')
+    chrome_options.add_argument('--disable-extensions')
+    chrome_options.add_argument('--disable-background-networking')
+    chrome_options.add_argument('--disable-sync')
+    chrome_options.add_argument('--metrics-recording-only')
+    chrome_options.add_argument('--disable-default-apps')
+    chrome_options.add_argument('--mute-audio')
+    chrome_options.add_argument('--no-first-run')
+    chrome_options.add_argument('--disable-setuid-sandbox')
+    chrome_options.add_argument('--window-size=1280,720')
+    chrome_options.add_argument('--single-process')
+    chrome_options.add_argument('--disable-dev-tools')
+    chrome_options.add_argument('--no-zygote')
+    
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
 def load_cookies(driver):
@@ -46,8 +61,6 @@ def check_and_restart(driver):
         run_button_selectors = [
             "//button[contains(text(), 'Run')]",
             "//button[@aria-label='Run']",
-            "//button[contains(@class, 'run-button')]",
-            "//*[contains(text(), 'Run') and contains(@role, 'button')]"
         ]
         for selector in run_button_selectors:
             try:
@@ -55,9 +68,9 @@ def check_and_restart(driver):
                     EC.element_to_be_clickable((By.XPATH, selector))
                 )
                 if run_button.is_displayed():
-                    print("⚠ Repl is stopped! Clicking Run button...")
+                    print("⚠ Repl stopped! Clicking Run...")
                     run_button.click()
-                    print("✓ Run button clicked successfully")
+                    print("✓ Clicked Run button")
                     time.sleep(5)
                     return True
             except (TimeoutException, NoSuchElementException):
@@ -65,7 +78,7 @@ def check_and_restart(driver):
         print("✓ Repl is running")
         return False
     except Exception as e:
-        print(f"✗ Error checking Repl status: {e}")
+        print(f"✗ Error: {e}")
         return False
 
 def monitor_repl():
@@ -74,38 +87,37 @@ def monitor_repl():
     print(f"Monitoring: {REPLIT_URL}")
     print(f"Check interval: {CHECK_INTERVAL} seconds")
     print("=" * 50)
+    
     driver = None
     restart_count = 0
+    
     try:
         driver = setup_driver()
         print("✓ Chrome driver initialized")
+        
         if not load_cookies(driver):
-            print("✗ Failed to load cookies. Please check COOKIES_JSON environment variable")
+            print("✗ Failed to load cookies")
             return
+        
         driver.get(REPLIT_URL)
         time.sleep(5)
+        
         while True:
             try:
-                print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Checking Repl status...")
+                print(f"\n[{time.strftime('%H:%M:%S')}] Checking...")
+                
                 if check_and_restart(driver):
                     restart_count += 1
                     print(f"Total restarts: {restart_count}")
+                
                 time.sleep(CHECK_INTERVAL)
+                
             except Exception as e:
-                print(f"✗ Error in monitoring loop: {e}")
-                print("Attempting to recover...")
-                try:
-                    driver.refresh()
-                    time.sleep(5)
-                except:
-                    print("Recovery failed. Reinitializing driver...")
-                    driver.quit()
-                    driver = setup_driver()
-                    load_cookies(driver)
-                    driver.get(REPLIT_URL)
-                    time.sleep(5)
+                print(f"✗ Error in loop: {e}")
+                time.sleep(CHECK_INTERVAL)
+                
     except KeyboardInterrupt:
-        print("\n\nStopping monitor...")
+        print("\nStopping...")
     except Exception as e:
         print(f"✗ Fatal error: {e}")
     finally:
